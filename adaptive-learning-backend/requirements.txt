@@ -1,0 +1,16 @@
+FastAPI
+uvicorn
+torch
+torchvision
+numpy
+pydantic
+motor
+pymongo
+scikit-learn
+requests
+pytest
+pytest-asyncio
+python-dotenv
+joblib
+PyJWT
+passlib[bcrypt]
