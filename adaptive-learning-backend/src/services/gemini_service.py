@@ -110,11 +110,32 @@ Now generate for the actual question above:"""
                 "tip": f"Pro tip: Focus on the key concept of {concepts_str} and how '{correct_answer}' relates to it directly."
             }
 
-    async def generate_question(self, topic: str, difficulty: str) -> dict:
+    async def generate_question(self, topic: str, difficulty: str, class_level: int = 5) -> dict:
         """Generate a question using Gemini REST API"""
         try:
-            prompt = f"""Generate a multiple-choice question about {topic} at {difficulty} difficulty level.
+            # Adjust difficulty description based on class level
+            grade_descriptions = {
+                1: "very basic, suitable for first graders (ages 6-7)",
+                2: "basic, suitable for second graders (ages 7-8)",
+                3: "intermediate, suitable for third graders (ages 8-9)",
+                4: "moderately challenging, suitable for fourth graders (ages 9-10)",
+                5: "challenging, suitable for fifth graders (ages 10-11)"
+            }
             
+            grade_desc = grade_descriptions.get(class_level, "age-appropriate for elementary students")
+            
+            prompt = f"""Generate a multiple-choice question SPECIFICALLY about {topic} at {difficulty} difficulty level for a Class {class_level} student ({grade_desc}).
+            
+CRITICAL REQUIREMENTS:
+- The question MUST be directly about {topic} only
+- DO NOT ask about geography, history, capitals, countries, or any other unrelated topics
+- Stay 100% focused on {topic} concepts
+- If {topic} includes animals, ask about animals and their habitats
+- If {topic} includes plants, ask about plants and nature
+- If {topic} includes math operations, ask about those specific operations
+
+IMPORTANT: The question MUST be directly related to {topic}. Do NOT generate questions about unrelated topics like geography, history, or general knowledge. Stay focused on the concepts of {topic}.
+
 Format the response as a JSON object with this structure:
 {{
     "id": <random_number>,
@@ -131,10 +152,14 @@ Format the response as a JSON object with this structure:
 }}
 
 Make sure:
-- The question is clear and age-appropriate
+- The question is DIRECTLY about {topic} - no unrelated topics
+- The question is appropriate for a Class {class_level} student - use simple language and concepts they can understand
+- Use vocabulary and math concepts suitable for their grade level
+- The question should challenge them but not be frustratingly difficult
 - Exactly ONE option is marked as correct
-- All options are plausible
-- The explanation is helpful and encouraging
+- All options are plausible but clearly distinguishable
+- The explanation is helpful, encouraging, and uses simple language
+- For math questions, use numbers and operations appropriate for Class {class_level}
 """
             
             payload = {
@@ -170,39 +195,56 @@ Make sure:
             print(f"Error generating question: {err}")
             return self._generate_fallback_question(topic, difficulty)
     
-    async def generate_question_batch(self, topic: str, difficulty: str, count: int = 3) -> List[dict]:
+    async def generate_question_batch(self, topic: str, difficulty: str, count: int = 3, class_level: int = 5) -> List[dict]:
         """Generate multiple practice questions at once for better performance"""
         try:
-            prompt = f"""Generate {count} DIVERSE and ENGAGING multiple-choice questions about "{topic}" at {difficulty} difficulty level.
+            # Adjust difficulty description based on class level
+            grade_descriptions = {
+                1: "very basic, suitable for first graders (ages 6-7)",
+                2: "basic, suitable for second graders (ages 7-8)",
+                3: "intermediate, suitable for third graders (ages 8-9)",
+                4: "moderately challenging, suitable for fourth graders (ages 9-10)",
+                5: "challenging, suitable for fifth graders (ages 10-11)"
+            }
+            
+            grade_desc = grade_descriptions.get(class_level, "age-appropriate for elementary students")
+            
+            prompt = f"""Generate {count} DIVERSE and ENGAGING multiple-choice questions SPECIFICALLY about "{topic}" at {difficulty} difficulty level for Class {class_level} students ({grade_desc}).
 
-Make each question UNIQUE and test different aspects of {topic}. Be creative and relevant!
+CRITICAL: ALL questions must be directly related to {topic}. Do NOT generate questions about unrelated topics like geography, history, capitals, countries, or general knowledge. Stay focused ONLY on {topic} concepts.
 
-FORMAT: Return ONLY valid JSON array (no extra text):
-[
-    {{
-        "id": <random_5_digit_number>,
-        "question": "<clear, specific question>",
-        "options": [
-            {{"text": "<correct_answer>", "correct": true}},
-            {{"text": "<plausible_wrong_option_1>", "correct": false}},
-            {{"text": "<plausible_wrong_option_2>", "correct": false}},
-            {{"text": "<plausible_wrong_option_3>", "correct": false}}
-        ],
-        "difficulty": "{difficulty}",
-        "explanation": "<why the correct answer is right>",
-        "conceptTags": ["{topic}"]
-    }}
-]
+If {topic} includes animals, ask about animals and their habitats.
+If {topic} includes plants, ask about plants and nature.
+If {topic} includes math operations, ask about those specific operations.
 
-REQUIREMENTS:
-- {count} completely different questions
-- Each tests a different aspect of {topic}
-- Questions are engaging and age-appropriate  
-- Exactly ONE correct option per question
-- Wrong options are believable but clearly incorrect
-- Shuffle the position of the correct answer (don't always put it first!)
+Each question should be in this JSON format:
+[{{
+    "id": <unique_number>,
+    "question": "<question_text>",
+    "options": [
+        {{"text": "<option1>", "correct": true}},
+        {{"text": "<option2>", "correct": false}},
+        {{"text": "<option3>", "correct": false}},
+        {{"text": "<option4>", "correct": false}}
+    ],
+    "difficulty": "{difficulty}",
+    "explanation": "<brief_explanation>",
+    "conceptTags": ["{topic}"]
+}}]
 
-Return ONLY the JSON array, nothing else!"""
+Requirements:
+- Generate EXACTLY {count} different questions ALL about {topic}
+- Each question appropriate for Class {class_level} students - use simple language and grade-appropriate concepts
+- Use vocabulary and operations suitable for their grade level
+- Questions should be challenging but achievable for their age
+- Each question must have exactly ONE correct answer
+- Make questions engaging and varied in style
+- Explanations should be encouraging and use simple language
+- For math: use numbers and operations appropriate for Class {class_level}
+- ALL questions must stay on the topic of {topic} - no unrelated content
+
+Return ONLY the JSON array, no additional text.
+"""
             
             print(f"Generating {count} practice questions for topic: {topic}")
             
@@ -258,6 +300,15 @@ Return ONLY the JSON array, nothing else!"""
                         {"text": "6", "correct": False}
                     ]
                 },
+                "science": {
+                    "question": "What do animals need to survive?",
+                    "options": [
+                        {"text": "Food and water", "correct": True},
+                        {"text": "Only sunlight", "correct": False},
+                        {"text": "Only air", "correct": False},
+                        {"text": "Only shelter", "correct": False}
+                    ]
+                },
                 "general": {
                     "question": "Which color is the sky on a clear day?",
                     "options": [
@@ -276,6 +327,15 @@ Return ONLY the JSON array, nothing else!"""
                         {"text": "35", "correct": False},
                         {"text": "50", "correct": False},
                         {"text": "40", "correct": False}
+                    ]
+                },
+                "science": {
+                    "question": "Where do fish live?",
+                    "options": [
+                        {"text": "In water", "correct": True},
+                        {"text": "On land", "correct": False},
+                        {"text": "In trees", "correct": False},
+                        {"text": "In the sky", "correct": False}
                     ]
                 },
                 "general": {
@@ -298,6 +358,15 @@ Return ONLY the JSON array, nothing else!"""
                         {"text": "14", "correct": False}
                     ]
                 },
+                "science": {
+                    "question": "What do plants need to make their own food?",
+                    "options": [
+                        {"text": "Sunlight, water, and air", "correct": True},
+                        {"text": "Only soil", "correct": False},
+                        {"text": "Only water", "correct": False},
+                        {"text": "Only sunlight", "correct": False}
+                    ]
+                },
                 "general": {
                     "question": "What is the capital of Australia?",
                     "options": [
@@ -311,8 +380,10 @@ Return ONLY the JSON array, nothing else!"""
         }
         
         topic_key = "general"
-        if "math" in topic.lower() or "algebra" in topic.lower():
+        if "math" in topic.lower() or "algebra" in topic.lower() or "addition" in topic or "subtraction" in topic or "multiplication" in topic or "division" in topic:
             topic_key = "math"
+        elif "science" in topic.lower() or "animals" in topic or "plants" in topic or "water" in topic or "air" in topic:
+            topic_key = "science"
         
         question_template = questions.get(difficulty, questions["medium"]).get(topic_key, questions["medium"]["general"])
         

@@ -89,6 +89,7 @@ class GenerateQuestionRequest(BaseModel):
     difficulty: str
     classLevel: int
     questionId: Optional[int] = None
+    mode: Optional[str] = "practice"  # "quiz" or "practice"
 
 
 @router.post("/process-answer")
@@ -257,11 +258,10 @@ async def process_answer(request: Dict[str, Any]):
 async def generate_question(request: GenerateQuestionRequest):
     """Generate a new practice question at specified difficulty"""
     try:
-        # Use Gemini to generate question
-        question_data = await gemini_service.generate_question(
-            topic=" ".join(request.conceptTags),
-            difficulty=request.difficulty
-        )
+        # Use action_executor for quiz questions to apply difficulty mapping
+        # For now, assume this is for quiz mode - later we can add a mode parameter
+        action_result = await action_executor.generate_question(request.difficulty, request.classLevel, request.conceptTags)
+        question_data = action_result["question"]
         
         return QuestionData(**question_data)
         
@@ -280,14 +280,29 @@ async def start_adaptive_mode(request: Dict[str, Any]):
         question_data = request.get("questionData", {})
         class_level = request.get("classLevel", 5)
         
+        # Get current difficulty from student state or default to easy
+        current_state = request.get("currentState", {})
+        quiz_difficulty = current_state.get("currentDifficulty", "easy")
+        
+        # For practice mode, keep difficulty easier than quiz
+        # Quiz uses: easy→medium, medium→hard, hard→hard (harder)
+        # Practice uses: easy→easy, medium→easy, hard→medium (easier)
+        difficulty_map = {
+            "easy": "easy",     # Practice easy stays easy
+            "medium": "easy",   # Practice medium becomes easy
+            "hard": "medium"    # Practice hard becomes medium
+        }
+        practice_difficulty = difficulty_map.get(quiz_difficulty, "easy")
+        
         # Generate a batch of practice questions for better performance
         topic = " ".join(question_data.get("conceptTags", ["general"]))
-        print(f"Generating practice questions for topic: {topic}")
+        print(f"Generating practice questions for topic: {topic} at {practice_difficulty} difficulty (quiz was {quiz_difficulty})")
         
         practice_questions = await gemini_service.generate_question_batch(
             topic=topic,
-            difficulty="easy",
-            count=3  # Generate 3 questions at once
+            difficulty=practice_difficulty,
+            count=3,  # Generate 3 questions at once
+            class_level=class_level
         )
         
         print(f"Generated {len(practice_questions)} practice questions")
