@@ -38,12 +38,63 @@ const Quiz = () => {
   const navigate = useNavigate();
   const { student, completeTopicHandler, addStars } = useStudent();
   
-  const quizSet = getQuizSet(chapterId || '', quizSetId || '', student.class);
-  // Shuffle options for all questions when component loads
-  const questions = useMemo(() => {
-    if (!quizSet?.questions) return [];
-    return quizSet.questions.map(shuffleQuestionOptions);
-  }, [quizSet]);
+  // Generate AI questions for quiz instead of using static ones
+  const [questions, setQuestions] = useState<any[]>([]);
+  const [loadingQuestions, setLoadingQuestions] = useState(true);
+
+  // Generate AI questions for quiz when component mounts
+  useEffect(() => {
+    const generateQuizQuestions = async () => {
+      try {
+        setLoadingQuestions(true);
+        const conceptTags = getConceptTags(chapterId || '');
+        const topic = conceptTags.join(' ');
+        
+        // Generate 5 questions for the quiz using AI at harder difficulty
+        const quizQuestions = [];
+        for (let i = 0; i < 5; i++) {
+          try {
+            // Use different difficulty levels for variety, but they will be mapped to harder levels
+            const difficulties: ('easy' | 'medium' | 'hard')[] = ['easy', 'medium', 'hard'];
+            const randomDifficulty = difficulties[Math.floor(Math.random() * difficulties.length)];
+            
+            const response = await learningApi.generateQuestion({
+              originalQuestion: `Generate a ${randomDifficulty} level question about ${topic}`,
+              correctAnswer: 'To be determined',
+              conceptTags: conceptTags,
+              difficulty: randomDifficulty, // This will be mapped to harder difficulty in backend
+              classLevel: student.class,
+              questionId: i + 1
+            });
+            
+            if (response) {
+              quizQuestions.push(response);
+            }
+          } catch (error) {
+            console.error(`Failed to generate question ${i + 1}:`, error);
+          }
+        }
+        
+        if (quizQuestions.length > 0) {
+          const shuffledQuestions = quizQuestions.map(shuffleQuestionOptions);
+          setQuestions(shuffledQuestions);
+          console.log('Generated AI questions for quiz:', shuffledQuestions.length);
+        } else {
+          console.error('Failed to generate any quiz questions');
+          setQuestions([]);
+        }
+      } catch (error) {
+        console.error('Error generating quiz questions:', error);
+        setQuestions([]);
+      } finally {
+        setLoadingQuestions(false);
+      }
+    };
+
+    if (chapterId && student.id) {
+      generateQuizQuestions();
+    }
+  }, [chapterId, student.id, student.class]);
 
   
   
@@ -73,13 +124,17 @@ const Quiz = () => {
   const [showPracticeMastery, setShowPracticeMastery] = useState(false);
 
   useEffect(() => {
-    if (timeLeft > 0 && selectedAnswer === null) {
+    // Only start timer when questions are loaded and not in practice mode, or when practice questions are ready
+    const shouldStartTimer = (!loadingQuestions && questions.length > 0 && !isPracticeMode) ||
+                            (isPracticeMode && practiceQuestion && selectedAnswer === null);
+
+    if (shouldStartTimer && timeLeft > 0 && selectedAnswer === null) {
       const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
       return () => clearTimeout(timer);
     } else if (timeLeft === 0 && selectedAnswer === null) {
       handleTimeout();
     }
-  }, [timeLeft, selectedAnswer]);
+  }, [timeLeft, selectedAnswer, loadingQuestions, questions.length, isPracticeMode, practiceQuestion]);
 
   const handleTimeout = () => {
     setIsCorrect(false);
@@ -374,7 +429,7 @@ const Quiz = () => {
     );
   }
 
-  if (!quizSet || questions.length === 0) {
+  if (questions.length === 0 && !loadingQuestions) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <p className="text-2xl">Quiz not found!</p>
@@ -385,9 +440,29 @@ const Quiz = () => {
   const question = isPracticeMode && practiceQuestion ? practiceQuestion : questions[currentQuestion];
   const subject = chapterId?.includes('math') ? 'math' : 'science';
   const subjectName = subject === 'math' ? 'Math Island' : 'Science Island';
-  const quizName = quizSet.name;
+  const quizName = `${chapterId?.replace(/[-_]/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Quiz'} - AI Generated`;
 
   // Difficulty badge styling
+  const getDisplayConcept = (chapterId: string): string => {
+    const tags = getConceptTags(chapterId);
+    
+    // Priority order for displaying concepts
+    const conceptPriority = [
+      'addition', 'subtraction', 'multiplication', 'division',
+      'shapes', 'geometry', 'counting', 'numbers',
+      'plants', 'animals', 'water', 'air'
+    ];
+    
+    for (const priority of conceptPriority) {
+      if (tags.includes(priority)) {
+        return priority.charAt(0).toUpperCase() + priority.slice(1);
+      }
+    }
+    
+    // Fallback to first tag or general
+    return tags[0]?.charAt(0).toUpperCase() + tags[0]?.slice(1) || 'General Knowledge';
+  };
+
   const getDifficultyBadge = (difficulty: string) => {
     const styles = {
       easy: 'bg-gradient-to-r from-green-400 to-green-500 text-white',
@@ -434,7 +509,9 @@ const Quiz = () => {
               </div>
               <div>
                 <h2 className="text-white font-bold text-lg">Practice Mode</h2>
-                <p className="text-white/90 text-sm">Master this concept step by step!</p>
+                <p className="text-white/90 text-sm">
+                  Practicing: <span className="font-semibold text-yellow-300">{getDisplayConcept(chapterId || '')}</span>
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -469,7 +546,7 @@ const Quiz = () => {
         )}
 
         {/* Timer */}
-        {!isPracticeMode && (
+        {!isPracticeMode && !loadingQuestions && questions.length > 0 && (
           <div className="flex items-center justify-center">
             <div className={`flex items-center gap-3 px-8 py-4 bg-white rounded-2xl shadow-lg transition-all duration-300 ${
               timeLeft < 5 ? 'animate-pulse ring-4 ring-red-300' : timeLeft < 10 ? 'ring-2 ring-orange-300' : ''
@@ -486,7 +563,21 @@ const Quiz = () => {
           </div>
         )}
 
+        {/* Loading State for Question Generation */}
+        {loadingQuestions && (
+          <Card className="p-8 md:p-12 bg-white border-0 shadow-2xl rounded-3xl">
+            <div className="flex flex-col items-center justify-center py-16">
+              <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[#5B9FD8] mb-6"></div>
+              <h3 className="text-2xl font-bold text-gray-800 mb-2">Generating Questions</h3>
+              <p className="text-gray-600 text-center max-w-md">
+                Our AI is creating personalized questions for your quiz. This may take a few moments...
+              </p>
+            </div>
+          </Card>
+        )}
+
         {/* Question Card */}
+        {!loadingQuestions && questions.length > 0 && (
         <Card className="p-8 md:p-12 bg-white border-0 shadow-2xl rounded-3xl">
           <div className="flex items-start gap-4 mb-8">
             <div className="text-5xl flex-shrink-0">🤖</div>
@@ -540,6 +631,7 @@ const Quiz = () => {
             </div>
           )}
         </Card>
+        )}
 
         {/* Practice Mastery Celebration */}
         {showPracticeMastery && (

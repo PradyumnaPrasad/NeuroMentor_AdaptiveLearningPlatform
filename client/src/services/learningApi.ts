@@ -34,6 +34,7 @@ export interface ProcessAnswerResponse {
     conceptsForReview?: string[];
     hint?: string;
     question?: QuestionData;  // For practice mode progression
+    questions?: QuestionData[];  // For practice mode batch questions
     difficulty?: string;
     progress?: { current: number; total: number };
   };
@@ -133,13 +134,15 @@ export const learningApi = {
   async startAdaptiveMode(
     studentId: number,
     questionData: QuestionData,
-    classLevel: number
+    classLevel: number,
+    currentState?: LearningState
   ): Promise<ProcessAnswerResponse> {
     try {
       const response = await axios.post(`${API_URL}/api/learning/start-adaptive-mode`, {
         studentId,
         questionData,
-        classLevel
+        classLevel,
+        currentState
       });
       // Debug: log full response payload for practice mode to help frontend debugging
       try {
