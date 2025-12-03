@@ -23,20 +23,13 @@ class ActionExecutor:
         return {"explanation": explanation}
 
     async def generate_question(self, difficulty: str, class_level: int = 5, concept_tags: List[str] = None) -> Dict[str, Any]:
-        # For quiz questions, make them harder than practice
-        # Quiz: easy→medium, medium→hard, hard→hard
-        # Practice: easy→easy, medium→medium, hard→hard
-        quiz_difficulty_map = {
-            "easy": "medium",    # Quiz easy becomes medium
-            "medium": "hard",    # Quiz medium becomes hard
-            "hard": "hard"       # Quiz hard stays hard
-        }
-        adjusted_difficulty = quiz_difficulty_map.get(difficulty, difficulty)
-
+        # Use the difficulty as provided without mapping
+        # The difficulty is already set correctly in the frontend with progressive pattern
+        
         # Use concept tags to create relevant topic
         topic = " ".join(concept_tags) if concept_tags else "general"
         
-        question = await self.gemini_service.generate_question(topic, adjusted_difficulty, class_level)
+        question = await self.gemini_service.generate_question(topic, difficulty, class_level)
         return {"question": question}
 
     def mark_mastered(self, student_id: str, question_id: str) -> Dict[str, Any]:

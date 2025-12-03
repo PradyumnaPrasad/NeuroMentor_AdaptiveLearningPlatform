@@ -270,52 +270,130 @@ async def generate_question(request: GenerateQuestionRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/generate-quiz-batch")
+async def generate_quiz_batch(request: Dict[str, Any]):
+    """Generate all 5 quiz questions in a single batch call for better performance"""
+    try:
+        print(f"Generating quiz batch with request: {request}")
+        
+        concept_tags = request.get("conceptTags", [])
+        class_level = request.get("classLevel", 5)
+        topic = " ".join(concept_tags) if concept_tags else "general"
+        
+        # Progressive difficulty pattern
+        difficulties = ['easy', 'easy', 'medium', 'medium', 'hard']
+        variations = [
+            'single-digit multiplication',
+            'double-digit multiplication', 
+            'word problem with simple context',
+            'word problem with different scenario',
+            'word problem with moderate numbers'
+        ]
+        
+        # Generate all 5 questions in optimal batches
+        all_questions = []
+        
+        # Batch 1: Generate 2 easy questions together
+        easy_questions = await gemini_service.generate_question_batch(
+            topic=f"{topic} - {variations[0]} and {variations[1]}",
+            difficulty='easy',
+            count=2,
+            class_level=class_level
+        )
+        all_questions.extend(easy_questions[:2])
+        
+        # Batch 2: Generate 2 medium questions together
+        medium_questions = await gemini_service.generate_question_batch(
+            topic=f"{topic} - {variations[2]} and {variations[3]}",
+            difficulty='medium',
+            count=2,
+            class_level=class_level
+        )
+        all_questions.extend(medium_questions[:2])
+        
+        # Batch 3: Generate 1 hard question
+        hard_questions = await gemini_service.generate_question_batch(
+            topic=f"{topic} - {variations[4]}",
+            difficulty='hard',
+            count=1,
+            class_level=class_level
+        )
+        all_questions.extend(hard_questions[:1])
+        
+        print(f"Successfully generated {len(all_questions)} questions in batch")
+        
+        return {
+            "questions": all_questions,
+            "count": len(all_questions)
+        }
+        
+    except Exception as e:
+        print(f"Error generating quiz batch: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/start-adaptive-mode")
 async def start_adaptive_mode(request: Dict[str, Any]):
-    """Start adaptive practice mode with a batch of practice questions"""
+    """Start adaptive practice mode with ALL 3 difficulty levels generated upfront for smooth progression"""
     try:
         print(f"Starting adaptive mode with request: {request}")
         
         student_id = request.get("studentId")
         question_data = request.get("questionData", {})
         class_level = request.get("classLevel", 5)
-        
-        # Get current difficulty from student state or default to easy
-        current_state = request.get("currentState", {})
-        quiz_difficulty = current_state.get("currentDifficulty", "easy")
-        
-        # For practice mode, keep difficulty easier than quiz
-        # Quiz uses: easy→medium, medium→hard, hard→hard (harder)
-        # Practice uses: easy→easy, medium→easy, hard→medium (easier)
-        difficulty_map = {
-            "easy": "easy",     # Practice easy stays easy
-            "medium": "easy",   # Practice medium becomes easy
-            "hard": "medium"    # Practice hard becomes medium
-        }
-        practice_difficulty = difficulty_map.get(quiz_difficulty, "easy")
-        
-        # Generate a batch of practice questions for better performance
         topic = " ".join(question_data.get("conceptTags", ["general"]))
-        print(f"Generating practice questions for topic: {topic} at {practice_difficulty} difficulty (quiz was {quiz_difficulty})")
         
-        practice_questions = await gemini_service.generate_question_batch(
+        print(f"🚀 Generating ALL 3 practice levels (easy, medium, hard) in one batch for smooth practice!")
+        print(f"Note: Practice questions use the SAME difficulty guidelines as quiz mode")
+        
+        # Generate all 3 difficulty levels at once - NO delays during practice!
+        # These use the EXACT SAME difficulty definitions as normal quiz mode:
+        # - Easy: Direct arithmetic (single-digit × single-digit OR double-digit simple)
+        # - Medium: Simple word problems with easy single-digit multiplication
+        # - Hard: Word problems with moderate multiplication (one digit 5-9, other 10-20)
+        all_practice_questions = []
+        
+        # Level 1: Easy question (same as quiz Q1-Q2)
+        easy_questions = await gemini_service.generate_question_batch(
             topic=topic,
-            difficulty=practice_difficulty,
-            count=3,  # Generate 3 questions at once
+            difficulty='easy',
+            count=1,
             class_level=class_level
         )
+        all_practice_questions.extend(easy_questions[:1])
         
-        print(f"Generated {len(practice_questions)} practice questions")
+        # Level 2: Medium question (same as quiz Q3-Q4)
+        medium_questions = await gemini_service.generate_question_batch(
+            topic=topic,
+            difficulty='medium',
+            count=1,
+            class_level=class_level
+        )
+        all_practice_questions.extend(medium_questions[:1])
+        
+        # Level 3: Hard question (same as quiz Q5)
+        hard_questions = await gemini_service.generate_question_batch(
+            topic=topic,
+            difficulty='hard',
+            count=1,
+            class_level=class_level
+        )
+        all_practice_questions.extend(hard_questions[:1])
+        
+        print(f"✅ Generated {len(all_practice_questions)} practice questions (easy, medium, hard) - ready for smooth progression!")
         
         return {
             "action": "start_practice",
             "data": {
-                "questions": practice_questions,  # Send all questions
-                "currentQuestion": practice_questions[0],  # Start with first
+                "questions": all_practice_questions,  # Send all 3 levels upfront
+                "currentQuestion": all_practice_questions[0],  # Start with easy
                 "questionIndex": 0,
-                "totalQuestions": len(practice_questions),
+                "totalQuestions": len(all_practice_questions),
                 "difficulty": "easy",
-                "message": f"Let's practice! Here are {len(practice_questions)} questions to help you master this topic."
+                "progress": {"current": 1, "total": 3},
+                "message": f"Let's practice! Progress through 3 levels: Easy → Medium → Hard"
             },
             "reward": 0,
             "nextState": {

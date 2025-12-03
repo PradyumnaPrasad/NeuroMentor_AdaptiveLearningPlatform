@@ -65,6 +65,7 @@ export interface QuestionData {
   }[];
   difficulty?: 'easy' | 'medium' | 'hard';
   explanation?: string;
+  hint?: string;
   conceptTags?: string[];
 }
 
@@ -183,6 +184,24 @@ export const learningApi = {
       return response.data;
     } catch (error) {
       console.error('Error getting review concepts:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Generate all 5 quiz questions in a single batch call (MUCH FASTER!)
+   */
+  async generateQuizBatch(conceptTags: string[], classLevel: number): Promise<QuestionData[]> {
+    try {
+      console.log('🚀 Generating quiz batch in single API call...');
+      const response = await axios.post(`${API_URL}/api/learning/generate-quiz-batch`, {
+        conceptTags,
+        classLevel
+      });
+      console.log(`✅ Received ${response.data.questions.length} questions in batch!`);
+      return response.data.questions;
+    } catch (error) {
+      console.error('Error generating quiz batch:', error);
       throw error;
     }
   }

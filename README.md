@@ -95,7 +95,7 @@ cd NeuroMentor_AdaptiveLearningPlatform
 ```bash
 cd adaptive-learning-backend
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/Scripts/activate  # On Windows: venv\Scripts\activate
 ```
 
 #### Install Dependencies
@@ -127,6 +127,10 @@ brew services start mongodb-community
 # Or run manually
 mongod --dbpath /usr/local/var/mongodb
 ```
+
+
+
+
 
 #### Run Backend Server
 ```bash

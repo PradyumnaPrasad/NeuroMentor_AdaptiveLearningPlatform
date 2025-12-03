@@ -12,6 +12,7 @@ import { Progress } from '@/components/ui/progress';
 import { learningApi, type AIExplanation } from '@/services/learningApi';
 import ExplanationModal from '@/components/ExplanationModal';
 import { getConceptTags } from '@/data/conceptTags';
+import HintDropdown from '@/components/HintDropdown';
 
 // Helper function to shuffle array
 const shuffleArray = <T,>(array: T[]): T[] => {
@@ -48,37 +49,24 @@ const Quiz = () => {
       try {
         setLoadingQuestions(true);
         const conceptTags = getConceptTags(chapterId || '');
-        const topic = conceptTags.join(' ');
         
-        // Generate 5 questions for the quiz using AI at harder difficulty
-        const quizQuestions = [];
-        for (let i = 0; i < 5; i++) {
-          try {
-            // Use different difficulty levels for variety, but they will be mapped to harder levels
-            const difficulties: ('easy' | 'medium' | 'hard')[] = ['easy', 'medium', 'hard'];
-            const randomDifficulty = difficulties[Math.floor(Math.random() * difficulties.length)];
-            
-            const response = await learningApi.generateQuestion({
-              originalQuestion: `Generate a ${randomDifficulty} level question about ${topic}`,
-              correctAnswer: 'To be determined',
-              conceptTags: conceptTags,
-              difficulty: randomDifficulty, // This will be mapped to harder difficulty in backend
-              classLevel: student.class,
-              questionId: i + 1
-            });
-            
-            if (response) {
-              quizQuestions.push(response);
-            }
-          } catch (error) {
-            console.error(`Failed to generate question ${i + 1}:`, error);
-          }
-        }
+        console.log('🚀 Generating all 5 quiz questions in batch (FAST!)...');
+        const startTime = Date.now();
+        
+        // Generate all 5 questions in a single batch call - MUCH FASTER!
+        const quizQuestions = await learningApi.generateQuizBatch(
+          conceptTags,
+          student.class
+        );
+        
+        const endTime = Date.now();
+        const timeTaken = ((endTime - startTime) / 1000).toFixed(2);
+        console.log(`✅ Generated ${quizQuestions.length} questions in ${timeTaken}s!`);
         
         if (quizQuestions.length > 0) {
           const shuffledQuestions = quizQuestions.map(shuffleQuestionOptions);
           setQuestions(shuffledQuestions);
-          console.log('Generated AI questions for quiz:', shuffledQuestions.length);
+          console.log('Progressive difficulty:', shuffledQuestions.map(q => q.difficulty));
         } else {
           console.error('Failed to generate any quiz questions');
           setQuestions([]);
@@ -94,7 +82,7 @@ const Quiz = () => {
     if (chapterId && student.id) {
       generateQuizQuestions();
     }
-  }, [chapterId, student.id, student.class]);
+  }, [chapterId, student.id, student.class, quizSetId]);
 
   
   
@@ -122,6 +110,7 @@ const Quiz = () => {
   const [practiceProgress, setPracticeProgress] = useState(1);
   const [practiceState, setPracticeState] = useState<any>(null);
   const [showPracticeMastery, setShowPracticeMastery] = useState(false);
+  const [loadingPractice, setLoadingPractice] = useState(false);
 
   useEffect(() => {
     // Only start timer when questions are loaded and not in practice mode, or when practice questions are ready
@@ -214,12 +203,13 @@ const Quiz = () => {
                 setEncouragingMsg('');
               }, 800);
             } else {
-              // Last practice question completed - show results
+              // Last practice question completed - show mastery celebration
               if (practiceIndex === practiceQuestions.length - 1) {
-                setEncouragingMsg('Practice Complete! 🎉');
-                setTimeout(() => {
-                  navigate('/session-complete');
-                }, 2000);
+                setEncouragingMsg('🎉 Practice Complete! You\'re getting better! 🏆');
+                addStars(30);
+                setShowConfetti(true);
+                setShowPracticeMastery(true);
+                setMascotMood('celebrating');
               } else {
                 setEncouragingMsg('Great!');
               }
@@ -244,6 +234,7 @@ const Quiz = () => {
       
       // Get AI Explanation (both modes)
       setIsLoadingExplanation(true);
+      setShowExplanation(true); // Show modal immediately with loading state
       try {
         const questionData = {
           id: currentQ.id,
@@ -278,7 +269,6 @@ const Quiz = () => {
         if (response.action === 'show_explanation' || (response.data && response.data.explanation)) {
           setAiExplanation(response.data.explanation);
           setCorrectAnswerText(response.data.correctAnswer || '');
-          setShowExplanation(true);
           
           // Exit practice mode on wrong answer
           if (isPracticeMode) {
@@ -303,6 +293,7 @@ const Quiz = () => {
     try {
       console.log('Starting practice mode...');
       setShowExplanation(false); // Close explanation modal
+      setLoadingPractice(true); // Show loading spinner
       
       const currentQ = questions[currentQuestion];
       const questionData = {
@@ -363,6 +354,8 @@ const Quiz = () => {
       }
     } catch (error) {
       console.error('Error starting practice mode:', error);
+    } finally {
+      setLoadingPractice(false); // Hide loading spinner
     }
   };
 
@@ -388,6 +381,8 @@ const Quiz = () => {
     setShowPracticeMastery(false);
     setIsPracticeMode(false);
     setPracticeQuestion(null);
+    setPracticeQuestions(null);
+    setPracticeIndex(0);
     setPracticeState(null);
     setPracticeProgress(0);
     setSelectedAnswer(null);
@@ -395,6 +390,7 @@ const Quiz = () => {
     setEncouragingMsg('');
     setShowConfetti(false);
     setMascotMood('thinking');
+    setTimeLeft(30); // Reset timer for next question
   };
 
   if (showResult) {
@@ -501,7 +497,7 @@ const Quiz = () => {
         </div>
 
         {/* Practice Mode Header */}
-        {isPracticeMode && (
+        {isPracticeMode && practiceQuestion && (
           <div className="flex items-center justify-between p-4 bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl shadow-lg">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center">
@@ -515,8 +511,8 @@ const Quiz = () => {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <span className={`px-4 py-2 rounded-full font-bold text-sm uppercase ${getDifficultyBadge(practiceState?.currentDifficulty || 'easy')}`}>
-                {practiceState?.currentDifficulty || 'Easy'}
+              <span className={`px-4 py-2 rounded-full font-bold text-sm uppercase ${getDifficultyBadge(practiceQuestion?.difficulty || 'easy')}`}>
+                {practiceQuestion?.difficulty === 'easy' ? '🟢 Easy' : practiceQuestion?.difficulty === 'medium' ? '🟡 Medium' : '🔴 Hard'}
               </span>
               <span className="text-white font-bold text-lg">
                 {practiceProgress}/3
@@ -532,9 +528,16 @@ const Quiz = () => {
               <h1 className="text-2xl font-bold text-gray-800">
                 {quizName}
               </h1>
-              <span className="text-lg font-semibold text-[#5B9FD8]">
-                Question {currentQuestion + 1}/{questions.length}
-              </span>
+              <div className="flex items-center gap-3">
+                {!loadingQuestions && questions.length > 0 && (
+                  <span className={`px-4 py-2 rounded-full font-bold text-sm uppercase shadow-md ${getDifficultyBadge(question?.difficulty || 'easy')}`}>
+                    {question?.difficulty === 'easy' ? '🟢 Easy' : question?.difficulty === 'medium' ? '🟡 Medium' : '🔴 Hard'}
+                  </span>
+                )}
+                <span className="text-lg font-semibold text-[#5B9FD8]">
+                  Question {currentQuestion + 1}/{questions.length}
+                </span>
+              </div>
             </div>
             <div className="w-full bg-white/50 rounded-full h-3 overflow-hidden">
               <div 
@@ -565,19 +568,72 @@ const Quiz = () => {
 
         {/* Loading State for Question Generation */}
         {loadingQuestions && (
-          <Card className="p-8 md:p-12 bg-white border-0 shadow-2xl rounded-3xl">
-            <div className="flex flex-col items-center justify-center py-16">
-              <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[#5B9FD8] mb-6"></div>
-              <h3 className="text-2xl font-bold text-gray-800 mb-2">Generating Questions</h3>
-              <p className="text-gray-600 text-center max-w-md">
-                Our AI is creating personalized questions for your quiz. This may take a few moments...
-              </p>
+          <Card className="p-12 md:p-16 bg-gradient-to-br from-blue-500 to-cyan-500 border-0 shadow-xl rounded-3xl">
+            <div className="flex flex-col items-center justify-center space-y-8">
+              {/* Simple elegant spinner with icon */}
+              <div className="relative w-20 h-20">
+                <div className="absolute inset-0 border-4 border-white/30 rounded-full"></div>
+                <div className="absolute inset-0 border-4 border-transparent border-t-white rounded-full animate-spin"></div>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-2xl">📝</span>
+                </div>
+              </div>
+              
+              {/* Clean title */}
+              <div className="text-center space-y-3">
+                <h3 className="text-2xl font-bold text-white">
+                  Generating Your Quiz
+                </h3>
+                <p className="text-white/90 text-base">
+                  Creating 5 personalized questions...
+                </p>
+              </div>
+              
+              {/* Simple progress indicator */}
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-white/80 rounded-full animate-pulse"></div>
+                <div className="w-2 h-2 bg-white/60 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+                <div className="w-2 h-2 bg-white/40 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {/* Loading State for Practice Mode */}
+        {loadingPractice && (
+          <Card className="p-12 md:p-16 bg-gradient-to-br from-purple-500 to-pink-500 border-0 shadow-xl rounded-3xl">
+            <div className="flex flex-col items-center justify-center space-y-8">
+              {/* Simple elegant spinner with icon */}
+              <div className="relative w-20 h-20">
+                <div className="absolute inset-0 border-4 border-white/30 rounded-full"></div>
+                <div className="absolute inset-0 border-4 border-transparent border-t-white rounded-full animate-spin"></div>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-2xl">🎯</span>
+                </div>
+              </div>
+              
+              {/* Clean title */}
+              <div className="text-center space-y-3">
+                <h3 className="text-2xl font-bold text-white">
+                  Preparing Practice Mode
+                </h3>
+                <p className="text-white/90 text-base">
+                  Generating 3 levels of practice...
+                </p>
+              </div>
+              
+              {/* Simple progress indicator */}
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-white/80 rounded-full animate-pulse"></div>
+                <div className="w-2 h-2 bg-white/60 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+                <div className="w-2 h-2 bg-white/40 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+              </div>
             </div>
           </Card>
         )}
 
         {/* Question Card */}
-        {!loadingQuestions && questions.length > 0 && (
+        {!loadingQuestions && !loadingPractice && questions.length > 0 && (
         <Card className="p-8 md:p-12 bg-white border-0 shadow-2xl rounded-3xl">
           <div className="flex items-start gap-4 mb-8">
             <div className="text-5xl flex-shrink-0">🤖</div>
@@ -585,6 +641,11 @@ const Quiz = () => {
               {question.question}
             </h2>
           </div>
+
+          {/* Hint Dropdown - Only in Practice Mode */}
+          {isPracticeMode && practiceQuestion && practiceQuestion.hint && (
+            <HintDropdown hint={practiceQuestion.hint} />
+          )}
 
           {/* Answer Options */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
@@ -643,18 +704,18 @@ const Quiz = () => {
                   {encouragingMsg}
                 </h2>
                 <p className="text-2xl text-white/90 font-semibold">
-                  You've completed all difficulty levels!
+                  Practice session complete! Ready to continue?
                 </p>
                 <div className="flex items-center justify-center gap-3 text-white text-xl">
                   <span className="text-3xl">⭐</span>
-                  <span className="font-bold">+50 Stars Earned!</span>
+                  <span className="font-bold">Stars Earned!</span>
                 </div>
                 <Button
                   size="lg"
                   onClick={handleBackToQuiz}
                   className="bg-white text-purple-600 px-12 py-6 rounded-2xl text-xl font-bold hover:scale-110 transition-transform shadow-xl hover:shadow-2xl mt-6"
                 >
-                  Back to Quiz →
+                  Continue Quiz →
                 </Button>
               </div>
             </Card>
@@ -676,18 +737,24 @@ const Quiz = () => {
 
         <Mascot mood={mascotMood} showMessage={!isCorrect && selectedAnswer !== null} customMessage={encouragingMsg} />
         
-        {/* AI Explanation Modal */}
-        {aiExplanation && (
+        {/* AI Explanation Modal - Only render when needed */}
+        {showExplanation && (
           <ExplanationModal
             isOpen={showExplanation}
-            onClose={() => setShowExplanation(false)}
+            onClose={() => {
+              setShowExplanation(false);
+              setAiExplanation(null);
+              setIsLoadingExplanation(false);
+            }}
             explanation={aiExplanation}
             correctAnswer={correctAnswerText}
             offerPractice={true}  // Enable practice button
             onStartPractice={handleStartPractice}  // Practice handler
             onContinue={() => {
               setShowExplanation(false);
+              setAiExplanation(null);
             }}
+            isLoading={isLoadingExplanation}
           />
         )}
       </div>

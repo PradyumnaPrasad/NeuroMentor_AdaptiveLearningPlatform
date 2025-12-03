@@ -11,11 +11,12 @@ import type { AIExplanation } from '@/services/learningApi';
 interface ExplanationModalProps {
   isOpen: boolean;
   onClose: () => void;
-  explanation: AIExplanation;
+  explanation: AIExplanation | null;
   correctAnswer: string;
   offerPractice?: boolean;
   onStartPractice?: () => void;
   onContinue?: () => void;
+  isLoading?: boolean;
 }
 
 const ExplanationModal = ({
@@ -25,10 +26,9 @@ const ExplanationModal = ({
   correctAnswer,
   offerPractice = false,
   onStartPractice,
-  onContinue
+  onContinue,
+  isLoading = false
 }: ExplanationModalProps) => {
-  console.log('ExplanationModal render:', { isOpen, explanation, correctAnswer });
-  
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -39,6 +39,42 @@ const ExplanationModal = ({
         </DialogHeader>
 
         <div className="space-y-6 p-4">
+          {/* Loading State */}
+          {isLoading && (
+            <Card className="p-12 bg-gradient-to-br from-indigo-500 to-purple-500 border-0 shadow-xl rounded-3xl">
+              <div className="flex flex-col items-center justify-center space-y-6">
+                {/* Simple elegant spinner with icon */}
+                <div className="relative w-16 h-16">
+                  <div className="absolute inset-0 border-4 border-white/30 rounded-full"></div>
+                  <div className="absolute inset-0 border-4 border-transparent border-t-white rounded-full animate-spin"></div>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-xl">🦉</span>
+                  </div>
+                </div>
+                
+                {/* Clean title */}
+                <div className="text-center space-y-2">
+                  <h3 className="text-xl font-bold text-white">
+                    Preparing Your Explanation
+                  </h3>
+                  <p className="text-white/90 text-sm">
+                    Analyzing your answer...
+                  </p>
+                </div>
+                
+                {/* Simple progress indicator */}
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-white/80 rounded-full animate-pulse"></div>
+                  <div className="w-2 h-2 bg-white/60 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+                  <div className="w-2 h-2 bg-white/40 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+                </div>
+              </div>
+            </Card>
+          )}
+
+          {/* Content - only show when not loading and explanation exists */}
+          {!isLoading && explanation && (
+            <>
           {/* Encouragement */}
           <Card className="p-6 bg-gradient-to-r from-purple-100 to-pink-100 border-2 border-purple-300">
             <div className="flex items-start gap-3">
@@ -117,6 +153,8 @@ const ExplanationModal = ({
               Close
             </Button>
           </div>
+          </>
+          )}
         </div>
       </DialogContent>
     </Dialog>
