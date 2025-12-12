@@ -111,12 +111,11 @@ Now generate for the actual question above:"""
                 "tip": f"Pro tip: Focus on the key concept of {concepts_str} and how '{correct_answer}' relates to it directly."
             }
 
-    async def generate_question(self, topic: str, difficulty: str, class_level: int = 5) -> dict:
+    async def generate_question(self, topic: str, difficulty: str, class_level: int = 5, subject_type: str = 'math') -> dict:
         """Generate a question using Gemini REST API"""
         try:
-            # Determine if this is a math or science topic
-            is_math_topic = any(keyword in topic.lower() for keyword in 
-                               ['math', 'addition', 'subtraction', 'multiplication', 'division', 'algebra', 'geometry', 'numbers', 'counting', 'arithmetic'])
+            # Use explicit subject type instead of detection
+            is_math_topic = (subject_type == 'math')
             
             # Adjust difficulty description based on class level
             grade_descriptions = {
@@ -129,45 +128,78 @@ Now generate for the actual question above:"""
             
             grade_desc = grade_descriptions.get(class_level, "age-appropriate for elementary students")
             
-            # Define question style based on difficulty
-            question_style_instructions = {
-                "easy": """
-QUESTION FORMAT FOR EASY:
+            # SEPARATE PROMPTS FOR MATH AND SCIENCE
+            if is_math_topic:
+                # MATH-SPECIFIC QUESTION STYLES
+                question_style_instructions = {
+                    "easy": """
+QUESTION FORMAT FOR EASY MATH:
 - Use DIRECT, STRAIGHTFORWARD arithmetic format
-- For multiplication (Class 3): 
-  * Question 1: Single-digit × single-digit (use VARIED numbers from 2-9)
-  * Question 2: Double-digit with simple numbers (one number should be 10-20, other 2-9)
+- For multiplication: Single-digit × single-digit (use VARIED numbers from 2-9) OR Double-digit with simple numbers (one number 10-20, other 2-9)
 - For addition: Simple direct addition (numbers from 5-50)
 - For subtraction: Simple direct subtraction (numbers from 5-50)
-- For science: Simple factual questions 
+- For division: Simple division with whole number results
 - Keep it simple and clear - NO word problems, NO complex scenarios
 - Just the basic arithmetic operation being tested directly
-- IMPORTANT: Choose RANDOM numbers each time, never repeat the same numbers""",
-                
-                "medium": """
-QUESTION FORMAT FOR MEDIUM:
-- Use SIMPLE CONTEXTUAL WORD PROBLEMS with easy multiplication
-- For math: Simple word problems with EASY single-digit multiplication
-  * Use creative scenarios: children collecting items, arranging objects, sharing things
-  * Keep multiplication SIMPLE: both numbers should be single digits (2-9)
-  * Use DIFFERENT numbers each time - avoid repeating combinations
+- IMPORTANT: Choose RANDOM numbers each time, never repeat the same numbers
+- ONLY MATH - NO science concepts mixed in!""",
+                    
+                    "medium": """
+QUESTION FORMAT FOR MEDIUM MATH:
+- Use SIMPLE CONTEXTUAL WORD PROBLEMS with easy arithmetic
+- Simple word problems with EASY single-digit operations
+- Use creative scenarios: children collecting items, arranging objects, sharing things
+- Keep numbers SIMPLE: single digits (2-9) for multiplication
+- Use DIFFERENT numbers each time - avoid repeating combinations
 - Use relatable, everyday scenarios
-- For science: Scenario-based questions about plants, animals, weather
 - One-step problems with context
-- IMPORTANT: Create UNIQUE scenarios, not generic "bags with items" - be creative!""",
-                
-                "hard": """
-QUESTION FORMAT FOR HARD:
-- Use WORD PROBLEMS with slightly harder multiplication (but still age-appropriate for Class 3)
-- For math: Word problems with moderate multiplication
-  * One number should be single-digit (5-9), other should be small double-digit (10-20)
-  * Keep results under 150
-  * Use VARIED scenarios: shops, farms, schools, parties, sports
+- IMPORTANT: Create UNIQUE scenarios, not generic "bags with items" - be creative!
+- ONLY MATH - NO science concepts mixed in!""",
+                    
+                    "hard": """
+QUESTION FORMAT FOR HARD MATH:
+- Use WORD PROBLEMS with slightly harder arithmetic
+- Word problems with moderate operations
+- For multiplication: One number single-digit (5-9), other small double-digit (10-20), results under 150
+- Use VARIED scenarios: shops, farms, schools, parties, sports
 - Use realistic scenarios that a child can visualize
-- For science: Scenarios requiring simple reasoning about nature and animals
 - ONE-STEP problems only, not multi-step
-- IMPORTANT: Use DIFFERENT number combinations each time - vary both the numbers and the context"""
-            }
+- IMPORTANT: Use DIFFERENT number combinations each time - vary both numbers and context
+- ONLY MATH - NO science concepts mixed in!"""
+                }
+            else:
+                # SCIENCE-SPECIFIC QUESTION STYLES
+                question_style_instructions = {
+                    "easy": """
+QUESTION FORMAT FOR EASY SCIENCE:
+- Simple factual questions about basic science concepts
+- Focus on: plants, animals, weather, human body, water, air, earth, sun, moon
+- Direct questions like "What do plants need to grow?" or "Where do fish live?"
+- NO MATH, NO NUMBERS, NO CALCULATIONS
+- Keep it simple and clear - just testing basic science knowledge
+- Use age-appropriate vocabulary
+- Focus on observable facts and everyday science""",
+                    
+                    "medium": """
+QUESTION FORMAT FOR MEDIUM SCIENCE:
+- Scenario-based questions about science concepts
+- Topics: plants, animals, weather, ecosystems, life cycles, simple machines, states of matter
+- Use relatable scenarios: "A plant in the garden...", "When you see clouds..."
+- Questions that require simple reasoning and understanding
+- NO MATH, NO NUMBERS, NO CALCULATIONS
+- One-step reasoning problems
+- Connect to real-world observations""",
+                    
+                    "hard": """
+QUESTION FORMAT FOR HARD SCIENCE:
+- Questions requiring deeper understanding and reasoning
+- Topics: food chains, adaptation, habitats, photosynthesis, water cycle, energy, simple experiments
+- Scenarios that require cause-and-effect thinking
+- "Why" and "How" questions that test understanding
+- NO MATH, NO NUMBERS, NO CALCULATIONS
+- Use realistic scenarios children can understand
+- Test conceptual understanding, not memorization"""
+                }
             
             style_guide = question_style_instructions.get(difficulty, question_style_instructions["medium"])
             
@@ -191,31 +223,69 @@ QUESTION FORMAT FOR HARD:
                 ["books", "toys", "balls", "cards"]
             ])
             
-            prompt = f"""Generate a UNIQUE and CREATIVE multiple-choice question about {topic} at {difficulty} difficulty level for a Class {class_level} student ({grade_desc}).
+            # Build appropriate prompt based on subject type and difficulty
+            if is_math_topic:
+                if difficulty == 'easy':
+                    # EASY = NO word problems, just direct arithmetic
+                    subject_guidance = f"""MATH SUBJECT REQUIREMENTS FOR EASY:
+- This is a DIRECT ARITHMETIC question about {topic}
+- Use ONLY the arithmetic operation - NO stories, NO scenarios, NO context
+- Example format: "What is 5 × 3?" or "Calculate 12 + 8"
+- Use VARIED numbers: {sample_numbers[0]}, {sample_numbers[1]}, {sample_numbers[2]}, {sample_numbers[3]} (choose different ones)
+- All answer options should be NUMBERS
+- ABSOLUTELY NO WORD PROBLEMS - just the math operation
+- DO NOT mix in science concepts - keep it pure math!
 
-UNIQUENESS REQUIREMENT - CRITICAL:
-- Make this question COMPLETELY DIFFERENT from typical examples shown
+HINT REQUIREMENT FOR EASY MATH:
+- Provide a tip or strategy (e.g., "Break it down: 12 = 10 + 2")
+- Keep hints SHORT and CLEAR (1-2 sentences max)"""
+                else:
+                    # MEDIUM/HARD = Word problems allowed
+                    subject_guidance = f"""MATH SUBJECT REQUIREMENTS:
+- This is a MATH question about {topic}
+- Use NUMBERS and ARITHMETIC OPERATIONS in a word problem
 - Use VARIED numbers: {sample_numbers[0]}, {sample_numbers[1]}, {sample_numbers[2]}, {sample_numbers[3]} (choose different ones)
 - Use DIFFERENT names: {sample_names[0]}, {sample_names[1]}, {sample_names[2]}, or create new ones
 - Use DIFFERENT objects/items: {sample_objects[0]}, {sample_objects[1]}, {sample_objects[2]}, or invent new ones
 - Create UNIQUE scenarios (not just "bags with apples" or "tables with chairs")
+- All answer options should be NUMBERS
+- DO NOT mix in science concepts - keep it pure math!
+
+HINT REQUIREMENT FOR MATH:
+- For word problems: show how to convert to simple arithmetic (e.g., "5 bags with 3 apples each" → "Think: 5 × 3 = ?")
+- Keep hints SHORT and CLEAR (1-2 sentences max)"""
+            else:
+                subject_guidance = f"""SCIENCE SUBJECT REQUIREMENTS:
+- This is a PURE SCIENCE question about {topic}
+- Focus on scientific concepts, facts, and understanding
+- NO MATH, NO NUMBERS, NO CALCULATIONS at all!
+- Use science vocabulary appropriate for Class {class_level}
+- Answer options should be science concepts/facts, NOT numbers
+- Make it about real-world science observations
+- DO NOT mix in math operations - keep it pure science!
+
+HINT REQUIREMENT FOR SCIENCE:
+- Give a memory aid or key concept hint
+- Help them recall the scientific principle
+- Connect to real-world examples they can observe
+- Keep hints SHORT and CLEAR (1-2 sentences max)"""
+            
+            prompt = f"""Generate a UNIQUE and CREATIVE multiple-choice question about {topic} at {difficulty} difficulty level for a Class {class_level} student ({grade_desc}).
+
+UNIQUENESS REQUIREMENT - CRITICAL:
+- Make this question COMPLETELY DIFFERENT from typical examples shown
+- Create UNIQUE scenarios
 - Unique ID for this question: {unique_id}
 - DO NOT repeat the example questions shown in the format guide - CREATE NEW ONES!
             
 CRITICAL REQUIREMENTS:
 - The question MUST be directly about {topic} only
-- DO NOT ask about geography, history, capitals, countries, or any other unrelated topics unless {topic} is specifically about those
 - Stay 100% focused on {topic} concepts
 - Generate DIVERSE questions - avoid repetitive patterns
 
-{style_guide}
+{subject_guidance}
 
-HINT REQUIREMENT:
-- Generate a helpful hint that simplifies the problem
-- For word problems: show how to convert to simple arithmetic (e.g., "5 bags with 3 apples each" → "5 × 3 = ?")
-- For direct math: provide a tip or strategy (e.g., "Break it down: 12 = 10 + 2")
-- For science: give a memory aid or key concept
-- Keep hints SHORT and CLEAR (1-2 sentences max)
+{style_guide}
 
 Format the response as a JSON object with this structure:
 {{
@@ -236,13 +306,13 @@ Format the response as a JSON object with this structure:
 Make sure:
 - Follow the question format style for {difficulty} difficulty EXACTLY as described above
 - The question is DIRECTLY about {topic} - no unrelated topics
+- {"PURE MATH with numbers and operations - NO science concepts!" if is_math_topic else "PURE SCIENCE with concepts - NO math or numbers!"}
 - The question is appropriate for a Class {class_level} student
 - Use vocabulary and concepts suitable for their grade level
 - Exactly ONE option is marked as correct
 - All options are plausible but clearly distinguishable
 - The explanation is helpful, encouraging, and uses simple language
 - The hint simplifies the problem without giving away the answer
-- For math questions, use numbers and operations appropriate for Class {class_level}
 """
             
             payload = {
@@ -273,14 +343,17 @@ Make sure:
         except json.JSONDecodeError as e:
             # Fallback: generate a simple question
             print(f"JSON decode error: {e}, generating fallback question")
-            return self._generate_fallback_question(topic, difficulty)
+            return self._generate_fallback_question(topic, difficulty, subject_type)
         except Exception as err:
             print(f"Error generating question: {err}")
-            return self._generate_fallback_question(topic, difficulty)
+            return self._generate_fallback_question(topic, difficulty, subject_type)
     
-    async def generate_question_batch(self, topic: str, difficulty: str, count: int = 3, class_level: int = 5) -> List[dict]:
+    async def generate_question_batch(self, topic: str, difficulty: str, count: int = 3, class_level: int = 5, subject_type: str = 'math') -> List[dict]:
         """Generate multiple practice questions at once for better performance"""
         try:
+            # Use explicit subject type instead of detection
+            is_math_topic = (subject_type == 'math')
+            
             # Adjust difficulty description based on class level
             grade_descriptions = {
                 1: "very basic, suitable for first graders (ages 6-7)",
@@ -292,12 +365,21 @@ Make sure:
             
             grade_desc = grade_descriptions.get(class_level, "age-appropriate for elementary students")
             
-            # Define question style based on difficulty - NO SPECIFIC NUMBER EXAMPLES
-            question_style_instructions = {
-                "easy": "Use DIRECT arithmetic. For multiplication: Q1 use single-digit × single-digit (choose RANDOM numbers 2-9), Q2 use double-digit (one number 10-20, other 2-9). NO word problems. Use DIFFERENT numbers each time.",
-                "medium": "Use SIMPLE word problems with EASY single-digit multiplication. Both numbers should be 2-9. Create UNIQUE scenarios - vary the context, names, and objects. Use DIFFERENT number combinations each time.",
-                "hard": "Use word problems with moderate multiplication. One number 5-9, other 10-20. Keep results under 150. ONE-STEP problems. Create VARIED scenarios and use DIFFERENT numbers each time."
-            }
+            # SEPARATE PROMPTS FOR MATH AND SCIENCE
+            if is_math_topic:
+                # MATH-SPECIFIC QUESTION STYLES
+                question_style_instructions = {
+                    "easy": "MATH: Use DIRECT arithmetic. For multiplication: single-digit × single-digit (RANDOM numbers 2-9) OR double-digit (one number 10-20, other 2-9). NO word problems. Use DIFFERENT numbers each time. ONLY MATH - NO science!",
+                    "medium": "MATH: Use SIMPLE word problems with EASY single-digit operations. Both numbers 2-9 for multiplication. Create UNIQUE scenarios - vary context, names, objects. Use DIFFERENT number combinations. ONLY MATH - NO science!",
+                    "hard": "MATH: Use word problems with moderate multiplication. One number 5-9, other 10-20. Results under 150. ONE-STEP problems. Create VARIED scenarios and DIFFERENT numbers. ONLY MATH - NO science!"
+                }
+            else:
+                # SCIENCE-SPECIFIC QUESTION STYLES
+                question_style_instructions = {
+                    "easy": "SCIENCE: Simple factual questions about basic science concepts (plants, animals, weather, human body, water, air). Direct questions. NO MATH, NO NUMBERS, NO CALCULATIONS. Just testing science knowledge.",
+                    "medium": "SCIENCE: Scenario-based questions about science (ecosystems, life cycles, simple machines, states of matter). Use relatable scenarios. Simple reasoning. NO MATH, NO NUMBERS. Connect to real-world observations.",
+                    "hard": "SCIENCE: Questions requiring deeper understanding (food chains, adaptation, photosynthesis, water cycle, energy). Cause-and-effect thinking. 'Why' and 'How' questions. NO MATH, NO NUMBERS. Test conceptual understanding."
+                }
             
             style_guide = question_style_instructions.get(difficulty, question_style_instructions["medium"])
             
@@ -322,28 +404,66 @@ Make sure:
                 ["flowers", "trees", "plants", "seeds", "leaves"]
             ]
             
+            # Build appropriate prompt based on subject type and difficulty
+            if is_math_topic:
+                if difficulty == 'easy':
+                    # EASY = NO word problems, just direct arithmetic
+                    subject_guidance = f"""MATH SUBJECT REQUIREMENTS FOR BATCH (EASY):
+- These are DIRECT ARITHMETIC questions about {topic}
+- Use ONLY the arithmetic operation - NO stories, NO scenarios, NO context
+- Example format: "What is 5 × 3?" or "Calculate 12 + 8"
+- Suggested number sets: {number_sets}
+- DO NOT repeat numbers across questions
+- All answer options should be NUMBERS
+- ABSOLUTELY NO WORD PROBLEMS - just the math operation
+- DO NOT mix in science concepts - keep it pure math!
+
+HINT REQUIREMENT FOR EASY MATH QUESTIONS:
+- Provide a tip or strategy (e.g., "Break it down: 12 = 10 + 2")
+- Keep hints SHORT and CLEAR (1-2 sentences max)"""
+                else:
+                    # MEDIUM/HARD = Word problems allowed
+                    subject_guidance = f"""MATH SUBJECT REQUIREMENTS FOR BATCH:
+- These are MATH questions about {topic}
+- Use NUMBERS and ARITHMETIC OPERATIONS in word problems
+- Suggested number sets: {number_sets}
+- Suggested names: {rand.choice(name_options)}
+- Suggested objects: {rand.choice(object_options)}
+- DO NOT repeat numbers, names, objects, or scenarios across questions
+- All answer options should be NUMBERS
+- DO NOT mix in science concepts - keep it pure math!
+
+HINT REQUIREMENT FOR MATH QUESTIONS:
+- For word problems: show how to convert to simple arithmetic (e.g., "5 bags with 3 apples each" → "Think: 5 × 3 = ?")
+- Keep hints SHORT and CLEAR (1-2 sentences max)"""
+            else:
+                subject_guidance = f"""SCIENCE SUBJECT REQUIREMENTS FOR BATCH:
+- These are PURE SCIENCE questions about {topic}
+- Focus on scientific concepts, facts, and understanding
+- NO MATH, NO NUMBERS, NO CALCULATIONS at all!
+- Use science vocabulary appropriate for Class {class_level}
+- Answer options should be science concepts/facts, NOT numbers
+- Make questions about real-world science observations
+- DO NOT mix in math operations - keep it pure science!
+
+HINT REQUIREMENT FOR SCIENCE QUESTIONS:
+- Give a memory aid or key concept hint
+- Help them recall the scientific principle
+- Connect to real-world examples they can observe
+- Keep hints SHORT and CLEAR (1-2 sentences max)"""
+            
             prompt = f"""Generate {count} COMPLETELY DIFFERENT and UNIQUE multiple-choice questions about "{topic}" at {difficulty} difficulty level for Class {class_level} students ({grade_desc}).
 
 CRITICAL UNIQUENESS REQUIREMENTS:
 - Each question MUST be COMPLETELY DIFFERENT from the others
-- DO NOT repeat numbers, names, objects, or scenarios
-- Use DIFFERENT contexts for each question (not all about bags, baskets, or boxes)
+- Use DIFFERENT contexts for each question
 - Batch ID: {batch_id}
-- Suggested number sets: {number_sets}
-- Suggested names: {rand.choice(name_options)}
-- Suggested objects: {rand.choice(object_options)}
 - CREATE UNIQUE SCENARIOS - NOT JUST THE EXAMPLES!
+
+{subject_guidance}
 
 QUESTION FORMAT REQUIREMENT:
 {style_guide}
-
-HINT REQUIREMENT FOR EACH QUESTION:
-- Generate a helpful hint that simplifies the problem
-- For word problems: show how to convert to simple arithmetic (e.g., "5 bags with 3 apples each" → "Think: 5 × 3 = ?")
-- For direct math: provide a tip or strategy (e.g., "Break it down: 12 = 10 + 2")
-- For science: give a memory aid or key concept (e.g., "Think about what plants need to grow")
-- Keep hints SHORT and CLEAR (1-2 sentences max)
-- Don't give away the answer, just simplify the approach
 
 Each question should be in this JSON format:
 [{{
@@ -363,14 +483,14 @@ Each question should be in this JSON format:
 
 Requirements:
 - Generate EXACTLY {count} different questions ALL about {topic}
+- {"PURE MATH with numbers and operations - NO science concepts!" if is_math_topic else "PURE SCIENCE with concepts - NO math or numbers!"}
 - Each question appropriate for Class {class_level} students - use simple language and grade-appropriate concepts
-- Use vocabulary and operations suitable for their grade level
+- Use vocabulary suitable for their grade level
 - Questions should be challenging but achievable for their age
 - Each question must have exactly ONE correct answer
 - Make questions engaging and varied in style
 - Explanations should be encouraging and use simple language
 - Each question MUST have a helpful hint that simplifies without revealing the answer
-- For math: use numbers and operations appropriate for Class {class_level}
 - ALL questions must stay on the topic of {topic} - no unrelated content
 
 Return ONLY the JSON array, no additional text.
@@ -435,9 +555,9 @@ Return ONLY the JSON array, no additional text.
             traceback.print_exc()
             # Fallback: generate diverse questions one by one
             print(f"Falling back to individual question generation")
-            return [self._generate_fallback_question(topic, difficulty) for _ in range(count)]
+            return [self._generate_fallback_question(topic, difficulty, subject_type) for _ in range(count)]
     
-    def _generate_fallback_question(self, topic: str, difficulty: str) -> dict:
+    def _generate_fallback_question(self, topic: str, difficulty: str, subject_type: str = 'math') -> dict:
         """Generate a simple fallback question when API fails"""
         questions = {
             "easy": {
@@ -538,11 +658,8 @@ Return ONLY the JSON array, no additional text.
             }
         }
         
-        topic_key = "general"
-        if "math" in topic.lower() or "algebra" in topic.lower() or "addition" in topic or "subtraction" in topic or "multiplication" in topic or "division" in topic:
-            topic_key = "math"
-        elif "science" in topic.lower() or "animals" in topic or "plants" in topic or "water" in topic or "air" in topic:
-            topic_key = "science"
+        # Use explicit subject type instead of detection
+        topic_key = "math" if subject_type == "math" else "science"
         
         question_template = questions.get(difficulty, questions["medium"]).get(topic_key, questions["medium"]["general"])
         

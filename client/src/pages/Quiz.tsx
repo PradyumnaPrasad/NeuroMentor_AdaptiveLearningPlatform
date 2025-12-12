@@ -50,13 +50,17 @@ const Quiz = () => {
         setLoadingQuestions(true);
         const conceptTags = getConceptTags(chapterId || '');
         
+        // Determine subject type from chapterId
+        const subjectType = chapterId?.includes('math') ? 'math' : 'science';
+        
         console.log('🚀 Generating all 5 quiz questions in batch (FAST!)...');
         const startTime = Date.now();
         
         // Generate all 5 questions in a single batch call - MUCH FASTER!
         const quizQuestions = await learningApi.generateQuizBatch(
           conceptTags,
-          student.class
+          student.class,
+          subjectType
         );
         
         const endTime = Date.now();
@@ -296,6 +300,7 @@ const Quiz = () => {
       setLoadingPractice(true); // Show loading spinner
       
       const currentQ = questions[currentQuestion];
+      const subjectType = chapterId?.includes('math') ? 'math' : 'science';
       const questionData = {
         id: currentQ.id,
         question: currentQ.question,
@@ -307,7 +312,8 @@ const Quiz = () => {
       const response = await learningApi.startAdaptiveMode(
         student.id || 1,
         questionData,
-        student.class
+        student.class,
+        subjectType
       );
       
       console.log('Practice mode response:', response);

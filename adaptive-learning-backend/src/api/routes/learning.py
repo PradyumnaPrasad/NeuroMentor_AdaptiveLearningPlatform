@@ -278,13 +278,17 @@ async def generate_quiz_batch(request: Dict[str, Any]):
         
         concept_tags = request.get("conceptTags", [])
         class_level = request.get("classLevel", 5)
+        subject_type = request.get("subjectType", "math")  # 'math' or 'science'
         topic = " ".join(concept_tags) if concept_tags else "general"
         
-        # Progressive difficulty pattern
+        print(f"📚 Subject Type: {subject_type.upper()} - Using {'MATH' if subject_type == 'math' else 'SCIENCE'} prompts")
+        print(f"🎯 Topic: {topic}")
+        
+        # Progressive difficulty pattern - DON'T add operation hints, let topic define it
         difficulties = ['easy', 'easy', 'medium', 'medium', 'hard']
         variations = [
-            'single-digit multiplication',
-            'double-digit multiplication', 
+            'direct arithmetic',
+            'direct arithmetic with different numbers', 
             'word problem with simple context',
             'word problem with different scenario',
             'word problem with moderate numbers'
@@ -293,30 +297,33 @@ async def generate_quiz_batch(request: Dict[str, Any]):
         # Generate all 5 questions in optimal batches
         all_questions = []
         
-        # Batch 1: Generate 2 easy questions together
+        # Batch 1: Generate 2 easy questions together (direct arithmetic only)
         easy_questions = await gemini_service.generate_question_batch(
-            topic=f"{topic} - {variations[0]} and {variations[1]}",
+            topic=topic,  # Pass topic as-is (e.g., "Multiplication" or "Division")
             difficulty='easy',
             count=2,
-            class_level=class_level
+            class_level=class_level,
+            subject_type=subject_type
         )
         all_questions.extend(easy_questions[:2])
         
-        # Batch 2: Generate 2 medium questions together
+        # Batch 2: Generate 2 medium questions together (word problems)
         medium_questions = await gemini_service.generate_question_batch(
-            topic=f"{topic} - {variations[2]} and {variations[3]}",
+            topic=topic,
             difficulty='medium',
             count=2,
-            class_level=class_level
+            class_level=class_level,
+            subject_type=subject_type
         )
         all_questions.extend(medium_questions[:2])
         
-        # Batch 3: Generate 1 hard question
+        # Batch 3: Generate 1 hard question (complex word problem)
         hard_questions = await gemini_service.generate_question_batch(
-            topic=f"{topic} - {variations[4]}",
+            topic=topic,
             difficulty='hard',
             count=1,
-            class_level=class_level
+            class_level=class_level,
+            subject_type=subject_type
         )
         all_questions.extend(hard_questions[:1])
         
@@ -343,10 +350,11 @@ async def start_adaptive_mode(request: Dict[str, Any]):
         student_id = request.get("studentId")
         question_data = request.get("questionData", {})
         class_level = request.get("classLevel", 5)
+        subject_type = request.get("subjectType", "math")  # 'math' or 'science'
         topic = " ".join(question_data.get("conceptTags", ["general"]))
         
         print(f"🚀 Generating ALL 3 practice levels (easy, medium, hard) in one batch for smooth practice!")
-        print(f"Note: Practice questions use the SAME difficulty guidelines as quiz mode")
+        print(f"📚 Subject Type: {subject_type.upper()} - Using {'MATH' if subject_type == 'math' else 'SCIENCE'} prompts")
         
         # Generate all 3 difficulty levels at once - NO delays during practice!
         # These use the EXACT SAME difficulty definitions as normal quiz mode:
@@ -360,7 +368,8 @@ async def start_adaptive_mode(request: Dict[str, Any]):
             topic=topic,
             difficulty='easy',
             count=1,
-            class_level=class_level
+            class_level=class_level,
+            subject_type=subject_type
         )
         all_practice_questions.extend(easy_questions[:1])
         
@@ -369,7 +378,8 @@ async def start_adaptive_mode(request: Dict[str, Any]):
             topic=topic,
             difficulty='medium',
             count=1,
-            class_level=class_level
+            class_level=class_level,
+            subject_type=subject_type
         )
         all_practice_questions.extend(medium_questions[:1])
         
@@ -378,7 +388,8 @@ async def start_adaptive_mode(request: Dict[str, Any]):
             topic=topic,
             difficulty='hard',
             count=1,
-            class_level=class_level
+            class_level=class_level,
+            subject_type=subject_type
         )
         all_practice_questions.extend(hard_questions[:1])
         

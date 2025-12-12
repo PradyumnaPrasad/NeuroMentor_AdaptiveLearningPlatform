@@ -136,6 +136,7 @@ export const learningApi = {
     studentId: number,
     questionData: QuestionData,
     classLevel: number,
+    subjectType: 'math' | 'science' = 'math',
     currentState?: LearningState
   ): Promise<ProcessAnswerResponse> {
     try {
@@ -143,6 +144,7 @@ export const learningApi = {
         studentId,
         questionData,
         classLevel,
+        subjectType,
         currentState
       });
       // Debug: log full response payload for practice mode to help frontend debugging
@@ -191,12 +193,13 @@ export const learningApi = {
   /**
    * Generate all 5 quiz questions in a single batch call (MUCH FASTER!)
    */
-  async generateQuizBatch(conceptTags: string[], classLevel: number): Promise<QuestionData[]> {
+  async generateQuizBatch(conceptTags: string[], classLevel: number, subjectType: 'math' | 'science' = 'math'): Promise<QuestionData[]> {
     try {
       console.log('🚀 Generating quiz batch in single API call...');
       const response = await axios.post(`${API_URL}/api/learning/generate-quiz-batch`, {
         conceptTags,
-        classLevel
+        classLevel,
+        subjectType
       });
       console.log(`✅ Received ${response.data.questions.length} questions in batch!`);
       return response.data.questions;
