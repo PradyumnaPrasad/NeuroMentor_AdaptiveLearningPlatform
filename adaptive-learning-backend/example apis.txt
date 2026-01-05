@@ -1,0 +1,12 @@
+# AIzaSyD-21TA7hPagx5c4gr3YduhGYj04hCcuVg
+# AIzaSyB7rtIjqnocKUvo5OKQkAqcUEdASfNNwZk
+
+source venv/Scripts/activate
+python -m uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+
+
+
+AIzaSyD81DvhpiDYs3_tDI5LgE5BhUCnbpHjX8o
+AIzaSyDpjYou_aGOR7BYj4W1odhwrxjlgc0vHA4
+AIzaSyANCHAo2tcaA6Qly_FTVuZBy6o2wCqz2jw
+AIzaSyAfsHJvrM_wgdRtePSoDHC78tgvo_0_70A

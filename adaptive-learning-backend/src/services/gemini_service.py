@@ -9,9 +9,10 @@ from typing import List, Dict, Any
 class GeminiService:
     def __init__(self):
         self.api_key = settings.gemini_api_key
-        # Use REST API directly with gemini-2.0-flash (fast, reliable, widely available)
-        self.base_url = f"https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key={self.api_key}"
+        # Use gemini-2.5-flash (latest model with good free tier)
+        self.base_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={self.api_key}"
         self.explanation_cache = {}  # Cache for explanations
+        self.last_request_time = 0  # Track last API call for rate limiting
 
     def get_explanation(self, question_id: str) -> dict:
         """Get explanation for a question"""
@@ -504,9 +505,18 @@ Return ONLY the JSON array, no additional text.
                 }]
             }
             
-            # Retry logic with exponential backoff
+            # Add delay between requests to avoid rate limiting (free tier: 15 RPM)
+            current_time = time.time()
+            time_since_last = current_time - self.last_request_time
+            if time_since_last < 4:  # Wait at least 4 seconds between requests
+                sleep_time = 4 - time_since_last
+                print(f"⏳ Rate limit protection: waiting {sleep_time:.1f}s...")
+                time.sleep(sleep_time)
+            self.last_request_time = time.time()
+            
+            # Retry logic with longer exponential backoff
             max_retries = 3
-            retry_delay = 2
+            retry_delay = 10  # Start with 10s (was 2s)
             response = None
             
             for attempt in range(max_retries):
@@ -517,7 +527,7 @@ Return ONLY the JSON array, no additional text.
                 except requests.exceptions.HTTPError as e:
                     if e.response.status_code == 429:  # Rate limit
                         if attempt < max_retries - 1:
-                            # Exponential backoff
+                            # Exponential backoff with longer delays
                             wait_time = retry_delay * (2 ** attempt)
                             print(f"⚠️ Rate limited. Waiting {wait_time}s before retry {attempt + 1}/{max_retries}...")
                             time.sleep(wait_time)
