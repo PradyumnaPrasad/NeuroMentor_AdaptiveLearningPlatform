@@ -5,12 +5,13 @@ import json
 import random
 import time
 from typing import List, Dict, Any
+from src.data.question_bank import get_fallback_question
 
 class GeminiService:
     def __init__(self):
         self.api_key = settings.gemini_api_key
-        # Use gemini-2.5-flash (latest model with good free tier)
-        self.base_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={self.api_key}"
+        # Use gemini-2.0-flash (stable, proven, good free tier)
+        self.base_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={self.api_key}"
         self.explanation_cache = {}  # Cache for explanations
         self.last_request_time = 0  # Track last API call for rate limiting
 
@@ -568,117 +569,5 @@ Return ONLY the JSON array, no additional text.
             return [self._generate_fallback_question(topic, difficulty, subject_type) for _ in range(count)]
     
     def _generate_fallback_question(self, topic: str, difficulty: str, subject_type: str = 'math') -> dict:
-        """Generate a simple fallback question when API fails"""
-        questions = {
-            "easy": {
-                "math": {
-                    "question": "What is 2 + 2?",
-                    "options": [
-                        {"text": "4", "correct": True},
-                        {"text": "3", "correct": False},
-                        {"text": "5", "correct": False},
-                        {"text": "6", "correct": False}
-                    ],
-                    "hint": "Count on your fingers: Start with 2, then add 2 more!"
-                },
-                "science": {
-                    "question": "What do animals need to survive?",
-                    "options": [
-                        {"text": "Food and water", "correct": True},
-                        {"text": "Only sunlight", "correct": False},
-                        {"text": "Only air", "correct": False},
-                        {"text": "Only shelter", "correct": False}
-                    ],
-                    "hint": "Think about what you need every day to stay healthy and alive."
-                },
-                "general": {
-                    "question": "Which color is the sky on a clear day?",
-                    "options": [
-                        {"text": "Blue", "correct": True},
-                        {"text": "Green", "correct": False},
-                        {"text": "Red", "correct": False},
-                        {"text": "Yellow", "correct": False}
-                    ],
-                    "hint": "Look outside on a sunny day and see what color you observe above you."
-                }
-            },
-            "medium": {
-                "math": {
-                    "question": "What is 15 × 3?",
-                    "options": [
-                        {"text": "45", "correct": True},
-                        {"text": "35", "correct": False},
-                        {"text": "50", "correct": False},
-                        {"text": "40", "correct": False}
-                    ],
-                    "hint": "Break it down: 15 × 3 means 15 added three times (15 + 15 + 15)."
-                },
-                "science": {
-                    "question": "Where do fish live?",
-                    "options": [
-                        {"text": "In water", "correct": True},
-                        {"text": "On land", "correct": False},
-                        {"text": "In trees", "correct": False},
-                        {"text": "In the sky", "correct": False}
-                    ],
-                    "hint": "Think about where you see fish when you visit an aquarium or beach."
-                },
-                "general": {
-                    "question": "How many continents are there?",
-                    "options": [
-                        {"text": "7", "correct": True},
-                        {"text": "5", "correct": False},
-                        {"text": "6", "correct": False},
-                        {"text": "8", "correct": False}
-                    ],
-                    "hint": "Remember: Asia, Africa, North America, South America, Antarctica, Europe, Australia."
-                }
-            },
-            "hard": {
-                "math": {
-                    "question": "What is the square root of 144?",
-                    "options": [
-                        {"text": "12", "correct": True},
-                        {"text": "11", "correct": False},
-                        {"text": "13", "correct": False},
-                        {"text": "14", "correct": False}
-                    ],
-                    "hint": "Think: What number times itself equals 144? (? × ? = 144)"
-                },
-                "science": {
-                    "question": "What do plants need to make their own food?",
-                    "options": [
-                        {"text": "Sunlight, water, and air", "correct": True},
-                        {"text": "Only soil", "correct": False},
-                        {"text": "Only water", "correct": False},
-                        {"text": "Only sunlight", "correct": False}
-                    ],
-                    "hint": "Remember photosynthesis needs three main ingredients from nature."
-                },
-                "general": {
-                    "question": "What is the capital of Australia?",
-                    "options": [
-                        {"text": "Canberra", "correct": True},
-                        {"text": "Sydney", "correct": False},
-                        {"text": "Melbourne", "correct": False},
-                        {"text": "Brisbane", "correct": False}
-                    ],
-                    "hint": "The capital is not the biggest city - it's a specially designed capital city."
-                }
-            }
-        }
-        
-        # Use explicit subject type instead of detection
-        topic_key = "math" if subject_type == "math" else "science"
-        
-        question_template = questions.get(difficulty, questions["medium"]).get(topic_key, questions["medium"]["general"])
-        
-        return {
-            "id": random.randint(10000, 99999),
-            "question": question_template["question"],
-            "options": question_template["options"],
-            "difficulty": difficulty,
-            "explanation": "This is a practice question to help you learn.",
-            "hint": question_template.get("hint", "Think carefully about what you know about this topic."),
-            "conceptTags": [topic]
-        }
+        """Generate a fallback question using the comprehensive question bank"""
+        return get_fallback_question(topic, difficulty, subject_type)
